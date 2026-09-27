@@ -647,7 +647,7 @@ async function processOneFile(file) {
     try {
         const dataUri = await compressImage(file, COMPRESS_MAX_WIDTH, COMPRESS_QUALITY);
         const thumbnail = await generateThumbnail(dataUri);
-        log('Image compressée : ' + Math.round(dataUri.length / 1024) + ' Ko en base64');
+        log('Image compressée : ' + Math.round(dataUri.length / 1024) + ' Ko');
         return { file, dataUri, thumbnail, id: Date.now() + Math.random() };
     } catch (e) {
         log('Erreur traitement : ' + e.message);
@@ -756,7 +756,7 @@ function buildPrompt(variationIndex) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// API — image en string direct (format le plus courant)
+// API
 // ══════════════════════════════════════════════════════════════════
 async function apiFetch(url, options = {}, label = 'API') {
     for (let attempt = 0; attempt < 7; attempt++) {
@@ -787,11 +787,11 @@ async function apiFetch(url, options = {}, label = 'API') {
 }
 
 async function createVideoTask(imageDataUri, prompt) {
-    // ⚠️ IMAGE EN STRING DIRECT (pas d'objet { url })
+    // FORMAT OBJET (API attend un dictionnaire)
     const body = {
         model: MODEL_VIDEO,
         prompt: prompt,
-        image: imageDataUri,
+        image: { url: imageDataUri },
         num_frames: state.durationFrames,
         frame_rate: FRAME_RATE
     };
@@ -829,9 +829,9 @@ async function createVideoTask(imageDataUri, prompt) {
             continue;
         }
 
-        if (res.status === 400 && err.includes('invalid_json')) {
+        if (res.status === 400) {
             const wait = 15;
-            log('400 invalid_json → retry dans ' + wait + 's');
+            log('400 → retry dans ' + wait + 's');
             setStatus('Reprise… (' + wait + 's)');
             await sleep(wait * 1000);
             continue;
