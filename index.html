@@ -298,9 +298,10 @@ const POLL_BASE = 'https://apihub.agnes-ai.com/agnesapi';
 const MODEL_VIDEO = 'agnes-video-v2.0';
 const FRAME_RATE = 24;
 
-const CREATE_INTERVAL_MIN = 15000;
+// Délai entre les créations : 62s min (obligatoire pour éviter le 429)
+const CREATE_INTERVAL_MIN = 62000;
 const CREATE_INTERVAL_MAX = 90000;
-let createIntervalMs = 20000;
+let createIntervalMs = 62000;
 
 const POLL_INTERVAL_SEC = 8;
 const MAX_POLL_ATTEMPTS = 120;
@@ -309,6 +310,10 @@ const API_KEY_STORAGE = 'agnes_api_key';
 const WAKE_LOCK_PREF = 'agnes_wakelock_enabled';
 const MAX_IMAGE_SIZE = 12 * 1024 * 1024;
 const THUMBNAIL_MAX_WIDTH = 200;
+
+// Compression avant envoi à l'API
+const COMPRESS_MAX_WIDTH = 1280;
+const COMPRESS_QUALITY = 0.85;
 
 // ══════════════════════════════════════════════════════════════════
 // TOAST
@@ -424,7 +429,7 @@ async function ensureWakeLockActive() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// PRESETS DE PROMPT
+// PRESETS
 // ══════════════════════════════════════════════════════════════════
 const PROMPT_PRESETS = [
     { label: '🌿 Ghibli doux', text: 'Transforme cette image en scène d\'anime du Studio Ghibli. Ciel immense avec gros nuages blancs, herbe ondulante, lumière chaude d\'été, vent léger. Garde le sujet reconnaissable.' },
@@ -435,9 +440,6 @@ const PROMPT_PRESETS = [
     { label: '🌀 Manga N&B', text: 'Transforme cette image en planche de manga noir et blanc. Contours encre, trames de points, contraste fort, lignes de mouvement. Garde le sujet reconnaissable.' }
 ];
 
-// ══════════════════════════════════════════════════════════════════
-// STYLES
-// ══════════════════════════════════════════════════════════════════
 const STYLES = [
     { id: 'ghibli', name: 'Ghibli', emoji: '🌿', desc: 'Miyazaki, nature, ciel', prompt: 'Studio Ghibli anime style, Hayao Miyazaki aesthetic, watercolor backgrounds, warm nostalgic lighting, lush nature, big cumulus clouds. Transform the entire image while keeping the subject recognizable.' },
     { id: 'shonen', name: 'Shōnen', emoji: '⚔️', desc: 'Naruto, DBZ, action', prompt: 'Shōnen anime style, dynamic action lines, energetic aura, intense eyes, bold outlines, saturated colors. Transform the entire image while keeping the subject recognizable.' },
@@ -449,9 +451,6 @@ const STYLES = [
     { id: 'manga', name: 'Manga N&B', emoji: '🖤', desc: 'Encre, trames', prompt: 'Black and white Japanese manga style, stark ink outlines, screentones, dramatic cross-hatching, high contrast. Transform the entire image while keeping the subject recognizable.' }
 ];
 
-// ══════════════════════════════════════════════════════════════════
-// VARIATIONS (8 variations différentes, on en utilise 5 par défaut)
-// ══════════════════════════════════════════════════════════════════
 const VARIATIONS = [
     { label: 'Doux & lent', text: 'Very subtle movement, slow gentle breathing, soft wind, peaceful serene atmosphere, static camera, soft golden hour light.' },
     { label: 'Cinématique', text: 'Cinematic slow dolly-in, dramatic composition, beautiful rim lighting, film-like color grading, professional cinematography.' },
@@ -490,7 +489,7 @@ const state = {
 };
 
 // ══════════════════════════════════════════════════════════════════
-// CLÉ API (stockage robuste)
+// CLÉ API
 // ══════════════════════════════════════════════════════════════════
 let memoryKey = '';
 function setCookie(name, value, days) {
@@ -606,14 +605,33 @@ function formatEta(sec) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// TRAITEMENT DES IMAGES
+// TRAITEMENT DES IMAGES — avec compression
 // ══════════════════════════════════════════════════════════════════
-function fileToDataUri(file) {
+function compressImage(file, maxWidth, quality) {
     return new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = e => resolve(e.target.result);
-        r.onerror = () => reject(new Error('Erreur lecture'));
-        r.readAsDataURL(file);
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    let w = img.width, h = img.height;
+                    if (w > maxWidth) {
+                        h = Math.round(h * maxWidth / w);
+                        w = maxWidth;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                } catch (err) { reject(err); }
+            };
+            img.onerror = () => reject(new Error('Image illisible'));
+            img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('Lecture échouée'));
+        reader.readAsDataURL(file);
     });
 }
 function generateThumbnail(dataUri) {
@@ -638,10 +656,13 @@ async function processOneFile(file) {
     if (!file.type.startsWith('image/')) return null;
     if (file.size > MAX_IMAGE_SIZE) { log('Image trop lourde : ' + file.name); return null; }
     try {
-        const dataUri = await fileToDataUri(file);
-        const thumbnail = await generateThumbnail(dataUri);
-        return { file, dataUri, thumbnail, id: Date.now() + Math.random() };
-    } catch (e) { return null; }
+        const compressedDataUri = await compressImage(file, COMPRESS_MAX_WIDTH, COMPRESS_QUALITY);
+        const thumbnail = await generateThumbnail(compressedDataUri);
+        return { file, dataUri: compressedDataUri, thumbnail, id: Date.now() + Math.random() };
+    } catch (e) {
+        log('Erreur traitement : ' + e.message);
+        return null;
+    }
 }
 async function handleFiles(files) {
     const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
@@ -649,7 +670,7 @@ async function handleFiles(files) {
     state.isLoadingImages = true; updateGenerateBtn();
     setStatus('Chargement de ' + imageFiles.length + ' image(s)…');
     document.getElementById('upload-zone').classList.add('loading');
-    const BATCH = 5;
+    const BATCH = 3;
     let processed = 0;
     for (let i = 0; i < imageFiles.length; i += BATCH) {
         const batch = imageFiles.slice(i, i + BATCH);
@@ -658,7 +679,7 @@ async function handleFiles(files) {
             if (r.status === 'fulfilled' && r.value) { state.images.push(r.value); processed++; }
         }
         renderImages();
-        setStatus('Chargement… ' + processed + '/' + imageFiles.length);
+        setStatus('Compression… ' + processed + '/' + imageFiles.length);
     }
     state.isLoadingImages = false;
     document.getElementById('upload-zone').classList.remove('loading');
@@ -719,7 +740,7 @@ function renderStyles() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// CONSTRUCTION DU PROMPT (avec variation par vidéo)
+// CONSTRUCTION DU PROMPT
 // ══════════════════════════════════════════════════════════════════
 function buildPrompt(variationIndex) {
     const effect = state.selectedEffect ? STYLES.find(s => s.id === state.selectedEffect) : null;
@@ -747,7 +768,7 @@ function buildPrompt(variationIndex) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// API AGNES — version anti-cache pour TOUTES les requêtes
+// API — anti-cache + retry
 // ══════════════════════════════════════════════════════════════════
 async function apiFetch(url, options = {}, label = 'API') {
     for (let attempt = 0; attempt < 7; attempt++) {
@@ -755,15 +776,15 @@ async function apiFetch(url, options = {}, label = 'API') {
         try {
             const res = await fetch(url, options);
             if (res.status === 429) {
-                const wait = [15, 30, 45, 60, 90, 120, 180][Math.min(attempt, 6)];
+                const wait = [30, 60, 90, 120, 180, 240, 300][Math.min(attempt, 6)];
                 log(label + ' : 429, attente ' + wait + 's');
-                setStatus('L\'IA se prépare… (' + wait + 's)');
+                setStatus('Limite API — attente ' + wait + 's…');
                 await sleep(wait * 1000); continue;
             }
             if (res.status === 503) {
-                const wait = [5, 10, 15, 20, 30, 45][Math.min(attempt, 5)];
+                const wait = [10, 20, 30, 45, 60, 90][Math.min(attempt, 5)];
                 log(label + ' : 503, attente ' + wait + 's');
-                setStatus('Vidéo en préparation… (' + wait + 's)');
+                setStatus('Serveur occupé — attente ' + wait + 's…');
                 await sleep(wait * 1000); continue;
             }
             return res;
@@ -781,31 +802,55 @@ async function createVideoTask(imageDataUri, prompt) {
     const body = {
         model: MODEL_VIDEO,
         prompt: prompt,
-        image: { url: imageDataUri },   // ← FIX : format objet attendu par l'API
+        image: { url: imageDataUri },
         num_frames: state.durationFrames,
         frame_rate: FRAME_RATE
     };
+    const bodyStr = JSON.stringify(body);
 
-    const res = await apiFetch(API_BASE + '/videos', {
-        method: 'POST',
-        cache: 'no-store',
-        headers: {
-            'Authorization': 'Bearer ' + getApiKey(),
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
-        },
-        body: JSON.stringify(body)
-    }, 'Création');
+    for (let attempt = 0; attempt < 3; attempt++) {
+        if (state.stopRequested) throw new Error('Arrêt demandé');
 
-    if (!res.ok) {
+        const res = await apiFetch(API_BASE + '/videos', {
+            method: 'POST',
+            cache: 'no-store',
+            headers: {
+                'Authorization': 'Bearer ' + getApiKey(),
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
+            },
+            body: bodyStr
+        }, 'Création');
+
+        if (res.ok) {
+            const data = await res.json();
+            const videoId = data.video_id || data.id || data.task_id;
+            if (!videoId) throw new Error('Pas de video_id retourné');
+            return videoId;
+        }
+
         const err = await res.text();
+
+        if (res.status === 429) {
+            const wait = [60, 90, 120][attempt] || 120;
+            log('429 création → retry dans ' + wait + 's');
+            setStatus('Limite atteinte, nouvelle tentative dans ' + wait + 's…');
+            await sleep(wait * 1000);
+            continue;
+        }
+
+        if (res.status === 400 && err.includes('invalid_json')) {
+            const wait = 15;
+            log('400 invalid_json → retry dans ' + wait + 's');
+            setStatus('Reprise… (' + wait + 's)');
+            await sleep(wait * 1000);
+            continue;
+        }
+
         throw new Error('HTTP ' + res.status + ' — ' + err.slice(0, 250));
     }
-    const data = await res.json();
-    const videoId = data.video_id || data.id || data.task_id;
-    if (!videoId) throw new Error('Pas de video_id retourné');
-    return videoId;
+    throw new Error('Échec après 3 tentatives');
 }
 
 async function pollVideo(videoId, onProgress) {
@@ -825,7 +870,6 @@ async function pollVideo(videoId, onProgress) {
                 await sleep(1000); r--;
             }
         }
-        // Anti-cache : timestamp unique + cache no-store
         const url = POLL_BASE + '?video_id=' + encodeURIComponent(videoId) +
             '&model_name=' + encodeURIComponent(MODEL_VIDEO) + '&_=' + Date.now();
         const res = await apiFetch(url, {
@@ -854,7 +898,7 @@ async function pollVideo(videoId, onProgress) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// FILE D'ATTENTE (groupée par image)
+// FILE D'ATTENTE
 // ══════════════════════════════════════════════════════════════════
 function renderQueue() {
     const el = document.getElementById('queue');
@@ -864,7 +908,7 @@ function renderQueue() {
     const done = state.completed + state.failed;
     const inProgress = state.queue.filter(q => q.status === 'processing' || q.status === 'creating').length;
     const remaining = total - done - inProgress;
-    const estGen = 60;
+    const estGen = 90;
     const eta = remaining * (createIntervalMs / 1000) + inProgress * estGen;
 
     let html = '<div class="queue-summary">' +
@@ -977,7 +1021,6 @@ async function startGeneration() {
     state.failed = 0;
     createIntervalMs = CREATE_INTERVAL_MIN;
 
-    // Créer la file d'attente : pour chaque image, N vidéos avec variations différentes
     state.queue = [];
     state.images.forEach((img, imgIdx) => {
         for (let v = 0; v < state.videosPerImage; v++) {
@@ -1004,7 +1047,8 @@ async function startGeneration() {
     await ensureWakeLockActive();
     renderQueue(); updateGenerateBtn();
 
-    log('Démarrage — ' + state.images.length + ' image(s) × ' + state.videosPerImage + ' vidéos = ' + state.queue.length + ' total');
+    log('Démarrage — ' + state.images.length + ' image(s) × ' + state.videosPerImage + ' = ' + state.queue.length + ' vidéos');
+    log('Intervalle entre créations : ' + (createIntervalMs / 1000) + 's');
 
     const totalStart = Date.now();
     const pollingTasks = [];
@@ -1018,16 +1062,15 @@ async function startGeneration() {
                 pollingTasks.push(pollTaskAndDisplay(item));
             } catch (e) {
                 if (e.message === 'Arrêt demandé') break;
-                log('[Img ' + (item.imageIndex + 1) + ' | ' + item.variationLabel + '] Échec création : ' + e.message);
+                log('[Img ' + (item.imageIndex + 1) + ' | ' + item.variationLabel + '] Échec : ' + e.message);
                 item.status = 'failed'; item.progress = 'Échec'; state.failed++;
                 renderQueue(); updateGenerateBtn();
             }
-            // Pause entre les créations (sauf pour la dernière)
             if (i < state.queue.length - 1 && !state.stopRequested) {
                 const waitSec = Math.ceil(createIntervalMs / 1000);
                 for (let r = waitSec; r > 0; r--) {
                     if (state.stopRequested) break;
-                    setStatus('Pause créative — ' + (i + 2) + '/' + state.queue.length + ' dans ' + r + 's');
+                    setStatus('Pause API — ' + (i + 2) + '/' + state.queue.length + ' dans ' + r + 's');
                     await sleep(1000);
                 }
             }
@@ -1101,7 +1144,7 @@ function stopGeneration() {
     renderStyles();
     renderImages();
     renderQueue();
-    log('Prêt.');
+    log('Prêt. Intervalle création = ' + (CREATE_INTERVAL_MIN / 1000) + 's.');
 })();
 </script>
 
