@@ -172,8 +172,7 @@
 
 <div class="info-banner">
     <strong>Comment ça marche :</strong> Ajoutez vos photos, écrivez votre vision (ou choisissez un style).
-    Chaque image donne <strong>5 vidéos différentes</strong>, générées automatiquement l'une après l'autre,
-    avec des variations de mouvement, caméra et lumière. Format <strong>9:16</strong>.
+    Chaque image donne <strong>5 vidéos différentes</strong>, générées automatiquement l'une après l'autre.
 </div>
 
 <div class="api-panel" id="api-panel">
@@ -189,7 +188,7 @@
     </div>
     <div class="api-warning hidden" id="api-warning"></div>
     <div class="api-hint">
-        Clé gratuite sur <a href="https://platform.agnes-ai.com" target="_blank">platform.agnes-ai.com</a> → Settings → API Keys
+        Clé gratuite sur <a href="https://platform.agnes-ai.com" target="_blank">platform.agnes-ai.com</a>
     </div>
     <div class="wake-status" id="wake-status">
         <span id="wake-status-text">💤 Veille automatique</span>
@@ -208,18 +207,16 @@
 
 <div class="section open" id="section-prompt">
     <div class="section-header" data-toggle="section-prompt">
-        <span class="section-title">✍️ Votre vision <span class="badge soft">recommandé</span></span>
+        <span class="section-title">✍️ Votre vision</span>
         <span class="chevron">▼</span>
     </div>
     <div class="section-body">
         <div class="section-content">
             <textarea class="prompt-main" id="main-prompt"
-                placeholder="Décrivez ce que vous voulez pour TOUTES vos images. Par exemple :
-
-« Transforme cette image en scène d'anime Ghibli, ciel immense, lumière dorée, vent léger. Garde le sujet reconnaissable. »"></textarea>
+                placeholder="Décrivez ce que vous voulez pour TOUTES vos images..."></textarea>
             <div class="prompt-presets" id="prompt-presets"></div>
             <div class="prompt-main-hint">
-                💡 Chaque vidéo reçoit automatiquement une variation différente (mouvement, caméra, lumière).
+                💡 Chaque vidéo reçoit automatiquement une variation différente.
             </div>
         </div>
     </div>
@@ -227,7 +224,7 @@
 
 <div class="section" id="section-style">
     <div class="section-header" data-toggle="section-style">
-        <span class="section-title">🎌 Style anime <span class="badge">optionnel</span></span>
+        <span class="section-title">🎌 Style anime</span>
         <span class="chevron">▼</span>
     </div>
     <div class="section-body">
@@ -239,7 +236,7 @@
 
 <div class="section" id="section-tech">
     <div class="section-header" data-toggle="section-tech">
-        <span class="section-title">📷 Réglages techniques</span>
+        <span class="section-title">📷 Réglages</span>
         <span class="chevron">▼</span>
     </div>
     <div class="section-body">
@@ -248,7 +245,6 @@
                 <label class="control-label">Vidéos par image</label>
                 <select id="count-select">
                     <option value="1">1 vidéo</option>
-                    <option value="2">2 vidéos</option>
                     <option value="3">3 vidéos</option>
                     <option value="5" selected>5 vidéos (recommandé)</option>
                     <option value="10">10 vidéos</option>
@@ -258,7 +254,7 @@
                 <label class="control-label">Durée de chaque vidéo</label>
                 <select id="duration-select">
                     <option value="121">5 secondes</option>
-                    <option value="153" selected>6,4 secondes (recommandé)</option>
+                    <option value="153" selected>6,4 secondes</option>
                     <option value="241">10 secondes</option>
                 </select>
             </div>
@@ -298,7 +294,6 @@ const POLL_BASE = 'https://apihub.agnes-ai.com/agnesapi';
 const MODEL_VIDEO = 'agnes-video-v2.0';
 const FRAME_RATE = 24;
 
-// Délai entre les créations : 62s min (obligatoire pour éviter le 429)
 const CREATE_INTERVAL_MIN = 62000;
 const CREATE_INTERVAL_MAX = 90000;
 let createIntervalMs = 62000;
@@ -310,10 +305,8 @@ const API_KEY_STORAGE = 'agnes_api_key';
 const WAKE_LOCK_PREF = 'agnes_wakelock_enabled';
 const MAX_IMAGE_SIZE = 12 * 1024 * 1024;
 const THUMBNAIL_MAX_WIDTH = 200;
-
-// Compression avant envoi à l'API
-const COMPRESS_MAX_WIDTH = 1280;
-const COMPRESS_QUALITY = 0.85;
+const COMPRESS_MAX_WIDTH = 1024;
+const COMPRESS_QUALITY = 0.8;
 
 // ══════════════════════════════════════════════════════════════════
 // TOAST
@@ -429,42 +422,42 @@ async function ensureWakeLockActive() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// PRESETS
+// PRESETS & STYLES
 // ══════════════════════════════════════════════════════════════════
 const PROMPT_PRESETS = [
-    { label: '🌿 Ghibli doux', text: 'Transforme cette image en scène d\'anime du Studio Ghibli. Ciel immense avec gros nuages blancs, herbe ondulante, lumière chaude d\'été, vent léger. Garde le sujet reconnaissable.' },
-    { label: '⚔️ Shōnen action', text: 'Transforme cette image en scène d\'anime shōnen dynamique. Effets d\'action, aura énergétique, regard déterminé, mouvement intense. Garde le sujet reconnaissable.' },
-    { label: '🌸 Shōjo romantique', text: 'Transforme cette image en scène d\'anime shōjo. Pétales de fleurs, lumière rosée, sparkles, atmosphère romantique. Garde le sujet reconnaissable.' },
-    { label: '🏙️ Makoto Shinkai', text: 'Transforme cette image en scène de Makoto Shinkai. Ciel hyper détaillé, lumière volumétrique, reflets lumineux, ambiance mélancolique. Garde le sujet reconnaissable.' },
-    { label: '🌃 Anime 90s', text: 'Transforme cette image en anime japonais des années 90. Grain, couleurs désaturées, contours épais, ambiance VHS nostalgique. Garde le sujet reconnaissable.' },
-    { label: '🌀 Manga N&B', text: 'Transforme cette image en planche de manga noir et blanc. Contours encre, trames de points, contraste fort, lignes de mouvement. Garde le sujet reconnaissable.' }
+    { label: '🌿 Ghibli doux', text: 'Transforme cette image en scène d\'anime du Studio Ghibli. Ciel immense, herbe ondulante, lumière chaude, vent léger. Garde le sujet reconnaissable.' },
+    { label: '⚔️ Shōnen action', text: 'Transforme cette image en scène d\'anime shōnen dynamique. Effets d\'action, aura, regard déterminé. Garde le sujet reconnaissable.' },
+    { label: '🌸 Shōjo romantique', text: 'Transforme cette image en scène d\'anime shōjo. Pétales, lumière rosée, sparkles. Garde le sujet reconnaissable.' },
+    { label: '🏙️ Makoto Shinkai', text: 'Transforme cette image en scène de Makoto Shinkai. Ciel hyper détaillé, lumière volumétrique, ambiance mélancolique.' },
+    { label: '🌃 Anime 90s', text: 'Transforme cette image en anime années 90. Grain, couleurs désaturées, contours épais, ambiance VHS.' },
+    { label: '🌀 Manga N&B', text: 'Transforme cette image en planche de manga noir et blanc. Contours encre, trames de points, contraste fort.' }
 ];
 
 const STYLES = [
-    { id: 'ghibli', name: 'Ghibli', emoji: '🌿', desc: 'Miyazaki, nature, ciel', prompt: 'Studio Ghibli anime style, Hayao Miyazaki aesthetic, watercolor backgrounds, warm nostalgic lighting, lush nature, big cumulus clouds. Transform the entire image while keeping the subject recognizable.' },
-    { id: 'shonen', name: 'Shōnen', emoji: '⚔️', desc: 'Naruto, DBZ, action', prompt: 'Shōnen anime style, dynamic action lines, energetic aura, intense eyes, bold outlines, saturated colors. Transform the entire image while keeping the subject recognizable.' },
-    { id: 'shojo', name: 'Shōjo', emoji: '🌸', desc: 'Sailor Moon, romantique', prompt: 'Shōjo anime style, sparkling eyes, pastel palette, flower petals floating, dreamy atmosphere. Transform the entire image while keeping the subject recognizable.' },
-    { id: 'shinkai', name: 'Makoto Shinkai', emoji: '🏙️', desc: 'Your Name, ciel détaillé', prompt: 'Makoto Shinkai anime style, hyper-detailed skies, volumetric god rays, lens flares, melancholic beautiful atmosphere. Transform the entire image while keeping the subject recognizable.' },
-    { id: '90s', name: 'Anime 90s', emoji: '📼', desc: 'Grain, VHS, retro', prompt: '1990s Japanese anime style, cel animation, film grain, desaturated colors, thick outlines, VHS quality. Transform the entire image while keeping the subject recognizable.' },
-    { id: 'cel', name: 'Cel Shading', emoji: '🎨', desc: 'Cartoon 3D net', prompt: 'Cel-shaded anime style, flat color regions, hard shadow edges, bold outlines, clean vector look. Transform the entire image while keeping the subject recognizable.' },
-    { id: 'chibi', name: 'Chibi Kawaii', emoji: '🐱', desc: 'Petit, mignon', prompt: 'Chibi kawaii anime style, big heads, small bodies, huge sparkling eyes, pastel colors, adorable. Transform the entire image while keeping the subject recognizable.' },
-    { id: 'manga', name: 'Manga N&B', emoji: '🖤', desc: 'Encre, trames', prompt: 'Black and white Japanese manga style, stark ink outlines, screentones, dramatic cross-hatching, high contrast. Transform the entire image while keeping the subject recognizable.' }
+    { id: 'ghibli', name: 'Ghibli', emoji: '🌿', desc: 'Miyazaki', prompt: 'Studio Ghibli anime style, Hayao Miyazaki aesthetic, watercolor backgrounds, warm lighting, lush nature. Transform the entire image while keeping the subject recognizable.' },
+    { id: 'shonen', name: 'Shōnen', emoji: '⚔️', desc: 'Action', prompt: 'Shōnen anime style, dynamic action lines, energetic aura, bold outlines. Transform the entire image while keeping the subject recognizable.' },
+    { id: 'shojo', name: 'Shōjo', emoji: '🌸', desc: 'Romantique', prompt: 'Shōjo anime style, sparkling eyes, pastel palette, dreamy atmosphere. Transform the entire image while keeping the subject recognizable.' },
+    { id: 'shinkai', name: 'Shinkai', emoji: '🏙️', desc: 'Your Name', prompt: 'Makoto Shinkai anime style, hyper-detailed skies, volumetric god rays, melancholic atmosphere. Transform the entire image while keeping the subject recognizable.' },
+    { id: '90s', name: 'Anime 90s', emoji: '📼', desc: 'VHS retro', prompt: '1990s Japanese anime style, cel animation, film grain, desaturated colors, VHS quality. Transform the entire image while keeping the subject recognizable.' },
+    { id: 'cel', name: 'Cel Shading', emoji: '🎨', desc: 'Cartoon 3D', prompt: 'Cel-shaded anime style, flat colors, hard shadow edges, bold outlines. Transform the entire image while keeping the subject recognizable.' },
+    { id: 'chibi', name: 'Chibi', emoji: '🐱', desc: 'Kawaii', prompt: 'Chibi kawaii anime style, big heads, small bodies, huge eyes, pastel colors. Transform the entire image while keeping the subject recognizable.' },
+    { id: 'manga', name: 'Manga N&B', emoji: '🖤', desc: 'Encre', prompt: 'Black and white Japanese manga style, stark ink outlines, screentones, high contrast. Transform the entire image while keeping the subject recognizable.' }
 ];
 
 const VARIATIONS = [
-    { label: 'Doux & lent', text: 'Very subtle movement, slow gentle breathing, soft wind, peaceful serene atmosphere, static camera, soft golden hour light.' },
-    { label: 'Cinématique', text: 'Cinematic slow dolly-in, dramatic composition, beautiful rim lighting, film-like color grading, professional cinematography.' },
-    { label: 'Rêveur', text: 'Dreamy ethereal atmosphere, floating particles, glowing dust, soft diffused light, slow floating camera drift, magical mood.' },
-    { label: 'Mélancolique', text: 'Melancholic contemplative mood, cool blue tones, soft mist, slow static camera, gentle breeze, poetic stillness.' },
-    { label: 'Dramatique', text: 'Dramatic lighting with strong contrast, deep shadows, intense atmosphere, slow rotating camera, powerful mood.' },
-    { label: 'Nostalgique', text: 'Nostalgic vintage atmosphere, warm sepia tones, film grain, dusty light rays, gentle motion, timeless feel.' },
-    { label: 'Frais', text: 'Bright fresh atmosphere, vibrant saturated colors, crisp daylight, clear blue sky, dynamic gentle camera, cheerful mood.' },
-    { label: 'Intime', text: 'Intimate close atmosphere, warm golden light, shallow depth of field, soft background blur, tender mood, slow breathing motion.' }
+    { label: 'Doux & lent', text: 'Very subtle movement, slow gentle breathing, soft wind, peaceful atmosphere, static camera.' },
+    { label: 'Cinématique', text: 'Cinematic slow dolly-in, dramatic composition, rim lighting, film-like color grading.' },
+    { label: 'Rêveur', text: 'Dreamy ethereal atmosphere, floating particles, soft light, slow floating camera, magical mood.' },
+    { label: 'Mélancolique', text: 'Melancholic mood, cool blue tones, soft mist, slow static camera, poetic stillness.' },
+    { label: 'Dramatique', text: 'Dramatic lighting, deep shadows, intense atmosphere, slow rotating camera, powerful mood.' },
+    { label: 'Nostalgique', text: 'Nostalgic vintage, warm sepia, film grain, dusty light rays, timeless feel.' },
+    { label: 'Frais', text: 'Bright fresh, vibrant colors, crisp daylight, dynamic gentle camera, cheerful mood.' },
+    { label: 'Intime', text: 'Intimate close, warm golden light, shallow depth of field, tender mood.' }
 ];
 
 const RANDOM_CAMERA = [
-    'slow dolly-in, camera gliding forward almost imperceptibly',
-    'static locked-off frame, subject moves within fixed borders',
+    'slow dolly-in, camera gliding forward',
+    'static locked-off frame',
     'slow pan following the subject',
     'subtle parallax revealing depth',
     'gentle handheld breathing movement',
@@ -605,7 +598,7 @@ function formatEta(sec) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// TRAITEMENT DES IMAGES — avec compression
+// TRAITEMENT DES IMAGES
 // ══════════════════════════════════════════════════════════════════
 function compressImage(file, maxWidth, quality) {
     return new Promise((resolve, reject) => {
@@ -615,13 +608,9 @@ function compressImage(file, maxWidth, quality) {
             img.onload = () => {
                 try {
                     let w = img.width, h = img.height;
-                    if (w > maxWidth) {
-                        h = Math.round(h * maxWidth / w);
-                        w = maxWidth;
-                    }
+                    if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
                     const canvas = document.createElement('canvas');
-                    canvas.width = w;
-                    canvas.height = h;
+                    canvas.width = w; canvas.height = h;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, w, h);
                     resolve(canvas.toDataURL('image/jpeg', quality));
@@ -654,11 +643,12 @@ function generateThumbnail(dataUri) {
 }
 async function processOneFile(file) {
     if (!file.type.startsWith('image/')) return null;
-    if (file.size > MAX_IMAGE_SIZE) { log('Image trop lourde : ' + file.name); return null; }
+    if (file.size > MAX_IMAGE_SIZE) { log('Trop lourde : ' + file.name); return null; }
     try {
-        const compressedDataUri = await compressImage(file, COMPRESS_MAX_WIDTH, COMPRESS_QUALITY);
-        const thumbnail = await generateThumbnail(compressedDataUri);
-        return { file, dataUri: compressedDataUri, thumbnail, id: Date.now() + Math.random() };
+        const dataUri = await compressImage(file, COMPRESS_MAX_WIDTH, COMPRESS_QUALITY);
+        const thumbnail = await generateThumbnail(dataUri);
+        log('Image compressée : ' + Math.round(dataUri.length / 1024) + ' Ko en base64');
+        return { file, dataUri, thumbnail, id: Date.now() + Math.random() };
     } catch (e) {
         log('Erreur traitement : ' + e.message);
         return null;
@@ -668,7 +658,7 @@ async function handleFiles(files) {
     const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
     if (!imageFiles.length) return;
     state.isLoadingImages = true; updateGenerateBtn();
-    setStatus('Chargement de ' + imageFiles.length + ' image(s)…');
+    setStatus('Chargement…');
     document.getElementById('upload-zone').classList.add('loading');
     const BATCH = 3;
     let processed = 0;
@@ -701,7 +691,7 @@ function renderImages() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// RENDU — PRESETS & STYLES
+// RENDU
 // ══════════════════════════════════════════════════════════════════
 function renderPromptPresets() {
     const c = document.getElementById('prompt-presets');
@@ -722,7 +712,6 @@ function renderStyles() {
     html += '<div class="no-style-card ' + (state.selectedEffect === null ? 'selected' : '') + '" data-effect="none">' +
         (state.selectedEffect === null ? '✓ Aucun style' : '🚫 Aucun style') + '</div>';
     html += '<div class="style-category-header">🎌 Styles anime</div>';
-    html += '<div class="style-category-desc">Ghibli, shōnen, shōjo, Shinkai, 90s, manga…</div>';
     html += STYLES.map(s =>
         '<div class="style-card ' + (state.selectedEffect === s.id ? 'selected' : '') + '" data-effect="' + s.id + '">' +
             '<div class="style-emoji">' + s.emoji + '</div>' +
@@ -740,7 +729,7 @@ function renderStyles() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// CONSTRUCTION DU PROMPT
+// PROMPT
 // ══════════════════════════════════════════════════════════════════
 function buildPrompt(variationIndex) {
     const effect = state.selectedEffect ? STYLES.find(s => s.id === state.selectedEffect) : null;
@@ -750,9 +739,8 @@ function buildPrompt(variationIndex) {
 
     parts.push(
         'Animate this image as the starting frame. ' +
-        'The subject must remain IDENTICAL: same face, same expression, same clothing, same pose, same identity. ' +
-        'Preserve the exact composition and framing of the original image. ' +
-        'Only subtle motion, breathing, light and atmosphere are animated.'
+        'The subject must remain IDENTICAL: same face, same expression, same clothing, same pose. ' +
+        'Preserve the exact composition and framing. Only subtle motion, breathing, light and atmosphere are animated.'
     );
 
     if (effect) parts.push(effect.prompt);
@@ -760,15 +748,15 @@ function buildPrompt(variationIndex) {
 
     if (hasUserPrompt) parts.push('Artistic direction: ' + state.mainPrompt.trim());
 
-    parts.push('Unique variation for this clip: ' + variation.text);
+    parts.push('Unique variation: ' + variation.text);
     parts.push(randomItem(RANDOM_CAMERA));
-    parts.push('Portrait 9:16, 24fps, no text, no watermarks, consistent character design.');
+    parts.push('Portrait 9:16, 24fps, no text, no watermarks.');
 
     return parts.join('. ');
 }
 
 // ══════════════════════════════════════════════════════════════════
-// API — anti-cache + retry
+// API — image en string direct (format le plus courant)
 // ══════════════════════════════════════════════════════════════════
 async function apiFetch(url, options = {}, label = 'API') {
     for (let attempt = 0; attempt < 7; attempt++) {
@@ -799,10 +787,11 @@ async function apiFetch(url, options = {}, label = 'API') {
 }
 
 async function createVideoTask(imageDataUri, prompt) {
+    // ⚠️ IMAGE EN STRING DIRECT (pas d'objet { url })
     const body = {
         model: MODEL_VIDEO,
         prompt: prompt,
-        image: { url: imageDataUri },
+        image: imageDataUri,
         num_frames: state.durationFrames,
         frame_rate: FRAME_RATE
     };
@@ -978,7 +967,6 @@ async function createTaskOnly(item) {
     item.status = 'processing';
     item.progress = 'En cours…';
     renderQueue();
-    log('[Img ' + (item.imageIndex + 1) + ' | ' + item.variationLabel + '] Tâche : ' + String(videoId).slice(0, 25) + '…');
 }
 
 async function pollTaskAndDisplay(item) {
@@ -1008,11 +996,11 @@ async function pollTaskAndDisplay(item) {
 // ══════════════════════════════════════════════════════════════════
 async function startGeneration() {
     if (state.isRunning || !state.images.length) return;
-    if (!getApiKey()) { showToast('Ajoutez votre clé API', 'error'); document.getElementById('api-key-input').focus(); return; }
+    if (!getApiKey()) { showToast('Ajoutez votre clé API', 'error'); return; }
 
     state.mainPrompt = document.getElementById('main-prompt').value.trim();
     if (!state.mainPrompt && !state.selectedEffect) {
-        if (!confirm('Ni prompt ni style. Continuer avec un style par défaut ?')) return;
+        if (!confirm('Ni prompt ni style. Continuer ?')) return;
     }
 
     state.isRunning = true;
@@ -1047,8 +1035,7 @@ async function startGeneration() {
     await ensureWakeLockActive();
     renderQueue(); updateGenerateBtn();
 
-    log('Démarrage — ' + state.images.length + ' image(s) × ' + state.videosPerImage + ' = ' + state.queue.length + ' vidéos');
-    log('Intervalle entre créations : ' + (createIntervalMs / 1000) + 's');
+    log('Démarrage — ' + state.queue.length + ' vidéos');
 
     const totalStart = Date.now();
     const pollingTasks = [];
@@ -1144,7 +1131,7 @@ function stopGeneration() {
     renderStyles();
     renderImages();
     renderQueue();
-    log('Prêt. Intervalle création = ' + (CREATE_INTERVAL_MIN / 1000) + 's.');
+    log('Prêt.');
 })();
 </script>
 
